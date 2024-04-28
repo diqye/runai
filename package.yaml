@@ -1,0 +1,84 @@
+name:                runai
+version:             0.1.0.0
+github:              "diqye/my-haskell.git"
+license:             BSD3
+author:              "diqye"
+maintainer:          "diqye@foxmail.com"
+copyright:           "copyright"
+category:            "HTTP"
+synopsis:            "HDBC version of MonadTrnas"
+
+extra-source-files: []
+# - README.md
+# - ChangeLog.md
+
+# Metadata used when publishing your package
+# synopsis:            Short description of your package
+# category:            Web
+
+# To avoid duplicated efforts in documentation and dealing with the
+# complications of embedding Haddock markup inside cabal files, it is
+# common to point users to the README.md file.
+description: Simple and free reqeust warped http-client
+
+dependencies:
+- base >= 4.7 && < 5
+# - myrequest
+- mydefault
+- myai
+- transformers
+- mtl
+- data-default-class
+- bytestring
+- text
+- unordered-containers
+- lens
+- aeson
+- lens-aeson
+- string-conversions
+- async
+
+ghc-options:
+- -Wall
+- -fno-warn-missing-signatures
+- -fno-warn-type-defaults
+- -fno-warn-name-shadowing
+- -fno-warn-orphans
+- -fno-warn-incomplete-uni-patterns
+- -fno-warn-unused-top-binds
+- -fno-warn-unused-imports
+- -XExtendedDefaultRules
+- -XOverloadedStrings
+- -XFlexibleContexts
+- -XConstraintKinds
+- -XScopedTypeVariables
+- -XTemplateHaskell
+
+
+library:
+  source-dirs: src
+
+
+executables:
+ runai:
+   main:                Main.hs
+   source-dirs:         app
+   ghc-options:
+   - -threaded
+   - -rtsopts
+   - -with-rtsopts=-N
+   dependencies:
+   - runai
+   - raw-strings-qq
+
+#
+# tests:
+#   appm-test:
+#     main:                Spec.hs
+#     source-dirs:         test
+#     ghc-options:
+#     - -threaded
+#     - -rtsopts
+#     - -with-rtsopts=-N
+#     dependencies:
+#     - appm
