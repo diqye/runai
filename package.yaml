@@ -23,7 +23,7 @@ description: Simple and free reqeust warped http-client
 
 dependencies:
 - base >= 4.7 && < 5
-# - myrequest
+- myrequest
 - mydefault
 - myai
 - transformers
@@ -34,9 +34,19 @@ dependencies:
 - unordered-containers
 - lens
 - aeson
+- yaml
 - lens-aeson
 - string-conversions
 - async
+- SHA
+- directory
+- process
+- filepath
+- exceptions
+- QuasiText
+- parsec
+- haskeline
+- vector
 
 ghc-options:
 - -Wall
@@ -69,7 +79,6 @@ executables:
    - -with-rtsopts=-N
    dependencies:
    - runai
-   - raw-strings-qq
 
 #
 # tests:

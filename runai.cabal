@@ -30,20 +30,31 @@ library
       src
   ghc-options: -Wall -fno-warn-missing-signatures -fno-warn-type-defaults -fno-warn-name-shadowing -fno-warn-orphans -fno-warn-incomplete-uni-patterns -fno-warn-unused-top-binds -fno-warn-unused-imports -XExtendedDefaultRules -XOverloadedStrings -XFlexibleContexts -XConstraintKinds -XScopedTypeVariables -XTemplateHaskell
   build-depends:
-      aeson
+      QuasiText
+    , SHA
+    , aeson
     , async
     , base >=4.7 && <5
     , bytestring
     , data-default-class
+    , directory
+    , exceptions
+    , filepath
+    , haskeline
     , lens
     , lens-aeson
     , mtl
     , myai
     , mydefault
+    , myrequest
+    , parsec
+    , process
     , string-conversions
     , text
     , transformers
     , unordered-containers
+    , vector
+    , yaml
   default-language: Haskell2010
 
 executable runai
@@ -54,20 +65,30 @@ executable runai
       app
   ghc-options: -Wall -fno-warn-missing-signatures -fno-warn-type-defaults -fno-warn-name-shadowing -fno-warn-orphans -fno-warn-incomplete-uni-patterns -fno-warn-unused-top-binds -fno-warn-unused-imports -XExtendedDefaultRules -XOverloadedStrings -XFlexibleContexts -XConstraintKinds -XScopedTypeVariables -XTemplateHaskell -threaded -rtsopts -with-rtsopts=-N
   build-depends:
-      aeson
+      QuasiText
+    , SHA
+    , aeson
     , async
     , base >=4.7 && <5
     , bytestring
     , data-default-class
+    , directory
+    , exceptions
+    , filepath
+    , haskeline
     , lens
     , lens-aeson
     , mtl
     , myai
     , mydefault
-    , raw-strings-qq
+    , myrequest
+    , parsec
+    , process
     , runai
     , string-conversions
     , text
     , transformers
     , unordered-containers
+    , vector
+    , yaml
   default-language: Haskell2010
