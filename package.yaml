@@ -19,7 +19,7 @@ extra-source-files: []
 # To avoid duplicated efforts in documentation and dealing with the
 # complications of embedding Haddock markup inside cabal files, it is
 # common to point users to the README.md file.
-description: Simple and free reqeust warped http-client
+description: Run gpt in ternimal with yaml
 
 dependencies:
 - base >= 4.7 && < 5

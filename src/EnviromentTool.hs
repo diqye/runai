@@ -36,6 +36,8 @@ import Control.Monad (unless,when)
 import qualified Data.Vector as V
 import Control.Monad.Trans.Cont (evalContT)
 import System.Console.Haskeline.Completion (completeFilename)
+import Data.List (intersperse)
+import Data.Monoid (First(..))
 
 setVars :: MonadIO m => T.Text -> m T.Text
 setVars content = liftIO $ do
@@ -138,6 +140,7 @@ runai = do
     a <- runAIT config $ myai param model text
     case a of
         Right _ -> pure ()
+        Left (First (Just (A.String e))) -> T.putStrLn e
         Left e -> L.putStrLn $ "Error \n" <> A.encode e
 
 
@@ -145,27 +148,41 @@ myai :: (MonadIO m,MonadAI m,MonadMask m) => Value -> String -> T.Text -> m ()
 myai param model originText = runInputT defaultSettings $ evalContT $ do
     req <- lift $ lift $ useAzureRequest model
     (recurConversation,msgs) <- createLabel V.empty
-    input <- lift $ getInputLine $ model <> "> "
-    Control.Monad.unless (isNothing input || input == Just ":quit") $ do
+    input <- lift $ do
+        let prefix = "\ESC[38;5;69m" <> model
+        a <- getInputLine $ prefix <> "> "
+        let mutipleInput = do
+                a <- getInputLine $ prefix <> "| "
+                if a == Just ":" then pure Nothing else do
+                    b <- mutipleInput
+                    pure $ if isNothing b then a else a <> Just "\n" <> b
+        if a == Just ":" then mutipleInput else pure a
+    when (input == Just ":export") $ do
+        export msgs originText
+        liftIO $ T.putStrLn "Success export.yaml"
+        recurConversation msgs
+    -- liftIO $ print input
+    unless (isNothing input || input == Just ":quit") $ do
         let userInpput = fromJust input
-        when (userInpput == ":export") $ do
-            export msgs originText
-            liftIO $ T.putStrLn "Success export.yaml"
-            recurConversation msgs
         let msgs' = V.snoc msgs  $ object ["role" =: "user","content" =: userInpput]
         let p = param & key "messages" . _Array %~ (<> msgs')
         assistantOutput <- lift $ lift $ useStream p req $ do
+            liftIO $ T.putStr "\ESC[38;5;169m"
             (recur,v,text) <- recurValue ""
             let token = fromMaybe "" $ v  ^? key "choices" . nth 0 . key "delta" . key "content" . _JSON'
             liftIO $ T.putStr token
             recur $ text <> token
-            liftIO $ putStrLn ""
+            liftIO $ putStrLn "\ESC[0;0m"
             pure $ text <> token
         let msgs = V.snoc msgs'  $ object ["role" =: "assistant","content" =: assistantOutput]
         recurConversation msgs
+    liftIO $ putStr "\ESC[0;0m"
 
 
 export :: MonadIO m => V.Vector Value -> T.Text -> m ()
 export msgs text = liftIO $ do
     let yaml = parseYaml text
     Y.encodeFile "export.yaml" $ yaml & key "messages" . _Array %~ (<> msgs)
+
+printJSON :: MonadIO m => Value -> m ()
+printJSON v = liftIO $ L.putStrLn $ A.encode v
