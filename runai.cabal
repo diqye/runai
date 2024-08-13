@@ -7,7 +7,7 @@ cabal-version: 1.12
 name:           runai
 version:        0.1.0.0
 synopsis:       HDBC version of MonadTrnas
-description:    Simple and free reqeust warped http-client
+description:    Run gpt in ternimal with yaml
 category:       HTTP
 homepage:       https://github.com/diqye/my-haskell.git#readme
 bug-reports:    https://github.com/diqye/my-haskell.git/issues

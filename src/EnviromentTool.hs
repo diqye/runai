@@ -17,7 +17,7 @@ import Control.Lens((^?), (&), (.~), (%~))
 import Data.Aeson.Lens (key, _JSON',_Array, atKey, nth)
 import Control.Applicative((<|>))
 import qualified Myai.Data.Azure as Az
-import System.Environment (getArgs)
+import System.Environment (getArgs, getProgName)
 import Myai.Data.Config (Config(_azure), MonadAI)
 import Data.Default.Class (Default(..))
 import qualified Data.ByteString.Lazy.Char8 as L
@@ -38,6 +38,8 @@ import Control.Monad.Trans.Cont (evalContT)
 import System.Console.Haskeline.Completion (completeFilename)
 import Data.List (intersperse)
 import Data.Monoid (First(..))
+import System.Process (readProcess)
+import System.Exit (exitSuccess)
 
 setVars :: MonadIO m => T.Text -> m T.Text
 setVars content = liftIO $ do
@@ -133,16 +135,37 @@ toAzure yaml = do
 
 runai :: IO ()
 runai = do
-    [arg] <- getArgs
+    arg <- processArgs
     (v,text) <- readYamlFromFile arg
     let (param,model,aconf) = fromJust $ toAzure v
     let config = def {_azure = aconf}
     a <- runAIT config $ myai param model text
+    putStr "\ESC[38;5;196m"
     case a of
         Right _ -> pure ()
         Left (First (Just (A.String e))) -> T.putStrLn e
-        Left e -> L.putStrLn $ "Error \n" <> A.encode e
+        Left e -> L.putStrLn $ A.encode e
+    putStr "\ESC[0;0m"
 
+processArgs :: IO String
+processArgs = do
+    args <- getArgs
+    process args
+    where
+        process [] = printHelp
+        process [arg] = return arg
+        process _ = printHelp
+        printHelp = do
+            progName <- getProgName
+            putStr "\ESC[38;5;169m"
+            putStrLn $ "使用: " <> progName <> " your/path.yaml"
+            putStr "\ESC[38;5;69m"
+            putStrLn "在会话中"
+            putStrLn ":export 将会话导出文件为export.yaml"
+            putStrLn ":clear  清空会话"
+            putStrLn ": 进入/退出多行模式"
+            putStr "\ESC[0;0m"
+            exitSuccess
 
 myai :: (MonadIO m,MonadAI m,MonadMask m) => Value -> String -> T.Text -> m ()
 myai param model originText = runInputT defaultSettings $ evalContT $ do
@@ -157,6 +180,11 @@ myai param model originText = runInputT defaultSettings $ evalContT $ do
                     b <- mutipleInput
                     pure $ if isNothing b then a else a <> Just "\n" <> b
         if a == Just ":" then mutipleInput else pure a
+    -- 清除会话记录
+    when (input == Just ":clear") $ do 
+        _ <- liftIO $ T.putStr "\ESC[H\ESC[2J\ESC[3J"
+        recurConversation V.empty
+    -- 导出会话记录
     when (input == Just ":export") $ do
         export msgs originText
         liftIO $ T.putStrLn "Success export.yaml"
@@ -169,6 +197,7 @@ myai param model originText = runInputT defaultSettings $ evalContT $ do
         assistantOutput <- lift $ lift $ useStream p req $ do
             liftIO $ T.putStr "\ESC[38;5;169m"
             (recur,v,text) <- recurValue ""
+            -- printJSON v
             let token = fromMaybe "" $ v  ^? key "choices" . nth 0 . key "delta" . key "content" . _JSON'
             liftIO $ T.putStr token
             recur $ text <> token

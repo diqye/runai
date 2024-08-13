@@ -1,8 +1,0 @@
-model: "gpt-4o"
-azure:
-  key: $AZURE_KEY
-  endpoint: $AZURE_ENDPOINT
-  temperature: 0
-messages:
-- system: 你是很棒的助手
-- user: oo
