@@ -139,7 +139,7 @@ runai = do
     (v,text) <- readYamlFromFile arg
     let (param,model,aconf) = fromJust $ toAzure v
     let config = def {_azure = aconf}
-    a <- runAIT config $ myai param model text
+    a <- runAIT config $ myai v param model text
     putStr "\ESC[38;5;196m"
     case a of
         Right _ -> pure ()
@@ -167,8 +167,9 @@ processArgs = do
             putStr "\ESC[0;0m"
             exitSuccess
 
-myai :: (MonadIO m,MonadAI m,MonadMask m) => Value -> String -> T.Text -> m ()
-myai param model originText = runInputT defaultSettings $ evalContT $ do
+myai :: (MonadIO m,MonadAI m,MonadMask m) => Value -> Value -> String -> T.Text -> m ()
+myai yaml param model originText = runInputT defaultSettings $ evalContT $ do
+    let logger = yaml ^? key "log" == Just  (A.toJSON True)
     req <- lift $ lift $ useAzureRequest model
     (recurConversation,msgs) <- createLabel V.empty
     input <- lift $ do
@@ -181,7 +182,7 @@ myai param model originText = runInputT defaultSettings $ evalContT $ do
                     pure $ if isNothing b then a else a <> Just "\n" <> b
         if a == Just ":" then mutipleInput else pure a
     -- 清除会话记录
-    when (input == Just ":clear") $ do 
+    when (input == Just ":clear") $ do
         _ <- liftIO $ T.putStr "\ESC[H\ESC[2J\ESC[3J"
         recurConversation V.empty
     -- 导出会话记录
@@ -197,7 +198,7 @@ myai param model originText = runInputT defaultSettings $ evalContT $ do
         assistantOutput <- lift $ lift $ useStream p req $ do
             liftIO $ T.putStr "\ESC[38;5;169m"
             (recur,v,text) <- recurValue ""
-            -- printJSON v
+            when logger $ liftIO $ putStrLn "" >> printJSON v
             let token = fromMaybe "" $ v  ^? key "choices" . nth 0 . key "delta" . key "content" . _JSON'
             liftIO $ T.putStr token
             recur $ text <> token
