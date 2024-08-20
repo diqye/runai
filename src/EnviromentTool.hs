@@ -147,7 +147,7 @@ runai = processArgs >>= runai' where
         (v,text) <- readYamlFromFile arg
         let (param,model,aconf) = fromJust $ toAzure v
         let config = def {_azure = aconf}
-        a <- runAIT config $ myai v param (fileName <> "." <> model) text
+        a <- runAIT config $ myai v param (fileName,model) text
         case a of
             Right _ -> pure ()
             Left (First (Just obj)) | obj ^? key "command" == Just "reload"  -> do 
@@ -202,13 +202,13 @@ mySettings = setComplete complete defaultSettings where
 trim :: String -> String
 trim = dropWhileEnd isSpace . dropWhile isSpace
 
-myai :: (MonadIO m,MonadAI m,MonadMask m) => Value -> Value -> String -> T.Text -> m ()
-myai yaml param prompt originText = runInputT mySettings $ evalContT $ do
+myai :: (MonadIO m,MonadAI m,MonadMask m) => Value -> Value -> (String,String) -> T.Text -> m ()
+myai yaml param (prompt,model) originText = runInputT mySettings $ evalContT $ do
     let logger = yaml ^? key "log" == Just  (A.toJSON True)
-    req <- lift $ lift $ useAzureRequest prompt
+    req <- lift $ lift $ useAzureRequest model
     (recurConversation,msgs) <- createLabel V.empty
     input' <- lift $ do
-        let prefix = "\ESC[38;5;69m" <> prompt
+        let prefix = "\ESC[38;5;69m" <> prompt <> "." <> model
         a <- getInputLine $ prefix <> "> "
         let mutipleInput = do
                 a <- getInputLine $ prefix <> "| "
