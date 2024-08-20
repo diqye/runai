@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 module EnviromentTool where
 
 import Mydefault
@@ -13,33 +14,39 @@ import qualified Data.Yaml as Y
 import Data.Either (fromRight)
 import Text.Parsec (runParserT, char, notFollowedBy, space, anyChar, many1, many, ParsecT, spaces, try)
 import Text.Parsec.Text (Parser)
-import Control.Lens((^?), (&), (.~), (%~))
+import Control.Lens((^?), (&), (.~), (%~), (^?!))
 import Data.Aeson.Lens (key, _JSON',_Array, atKey, nth)
 import Control.Applicative((<|>))
 import qualified Myai.Data.Azure as Az
 import System.Environment (getArgs, getProgName)
-import Myai.Data.Config (Config(_azure), MonadAI)
+import Myai.Data.Config (Config(_azure), MonadAI, createError)
 import Data.Default.Class (Default(..))
 import qualified Data.ByteString.Lazy.Char8 as L
 import qualified Data.Aeson as A
 import Control.Monad.Reader (ReaderT)
-import Control.Monad.Except (ExceptT)
+import Control.Monad.Except (ExceptT, MonadError (throwError))
 import System.Console.Haskeline
     ( runInputT,
       defaultSettings,
       getInputLine,
       Settings(complete),
       setComplete,
-      simpleCompletion )
+      simpleCompletion,
+      Completion,
+      Settings(Settings),
+      CompletionFunc )
 import Control.Monad.Catch(MonadMask)
 import Control.Monad (unless,when)
 import qualified Data.Vector as V
 import Control.Monad.Trans.Cont (evalContT)
 import System.Console.Haskeline.Completion (completeFilename)
-import Data.List (intersperse)
+import Data.List (intersperse, isPrefixOf, dropWhileEnd)
 import Data.Monoid (First(..))
 import System.Process (readProcess)
 import System.Exit (exitSuccess)
+import Data.Char (isSpace)
+import System.Directory (doesFileExist)
+import System.FilePath (takeBaseName)
 
 setVars :: MonadIO m => T.Text -> m T.Text
 setVars content = liftIO $ do
@@ -134,18 +141,31 @@ toAzure yaml = do
     pure (config,model,Az.Azure {Az._key = key, Az._endpoint = endpoint})
 
 runai :: IO ()
-runai = do
-    arg <- processArgs
-    (v,text) <- readYamlFromFile arg
-    let (param,model,aconf) = fromJust $ toAzure v
-    let config = def {_azure = aconf}
-    a <- runAIT config $ myai v param model text
-    putStr "\ESC[38;5;196m"
-    case a of
-        Right _ -> pure ()
-        Left (First (Just (A.String e))) -> T.putStrLn e
-        Left e -> L.putStrLn $ A.encode e
-    putStr "\ESC[0;0m"
+runai = processArgs >>= runai' where
+    runai' arg = do
+        let fileName = takeBaseName arg
+        (v,text) <- readYamlFromFile arg
+        let (param,model,aconf) = fromJust $ toAzure v
+        let config = def {_azure = aconf}
+        a <- runAIT config $ myai v param (fileName <> "." <> model) text
+        case a of
+            Right _ -> pure ()
+            Left (First (Just obj)) | obj ^? key "command" == Just "reload"  -> do 
+                putStr "\ESC[38;5;69m"
+                putStrLn $ "Rload file " <> arg
+                runai' arg
+            Left (First (Just obj )) | obj ^? key "command" == Just "change" -> do
+                putStr "\ESC[38;5;69m"
+                let path =  obj ^?! key "value" . _JSON'
+                putStrLn $ "Change file to " <> path
+                runai' path
+            Left (First (Just (A.String e))) -> do
+                putStr "\ESC[38;5;196m"
+                T.putStrLn e
+            Left e -> do
+                putStr "\ESC[38;5;196m"
+                L.putStrLn $ A.encode e
+        putStr "\ESC[0;0m"
 
 processArgs :: IO String
 processArgs = do
@@ -157,30 +177,60 @@ processArgs = do
         process _ = printHelp
         printHelp = do
             progName <- getProgName
-            putStr "\ESC[38;5;169m"
-            putStrLn $ "使用: " <> progName <> " your/path.yaml"
             putStr "\ESC[38;5;69m"
-            putStrLn "在会话中"
-            putStrLn ":export 将会话导出文件为export.yaml"
-            putStrLn ":clear  清空会话"
-            putStrLn ": 进入/退出多行模式"
+            putStrLn $ "使用: " <> progName <> " your/path.yaml"
+            putStrLn "在会话中(Tab补全)"
+            putStrLn "> :export         将会话导出文件为export.yaml"
+            putStrLn "> :start          直接调用LLM"
+            putStrLn "> :clear          清空会话"
+            putStrLn "> :               进入/退出多行模式"
+            putStrLn "> :reload         从新加载当前配置文件"
+            putStrLn "> :change file.yaml 加载新的配置文件"
             putStr "\ESC[0;0m"
             exitSuccess
 
+mySettings :: MonadIO m => Settings m
+mySettings = setComplete complete defaultSettings where
+    complete :: MonadIO m => CompletionFunc m
+    complete p@(a ,_) | ":change " `isPrefixOf` reverse a = completeFilename p
+    complete (a ,_) | ":" `isPrefixOf` reverse a = do
+        let commonds = [":export",":start", ":clear", ":reload", ":change"]
+        return ("", simpleCompletion <$> filter (isPrefixOf $ reverse a)  commonds)
+    complete _ =  return ("",[])
+
+
+trim :: String -> String
+trim = dropWhileEnd isSpace . dropWhile isSpace
+
 myai :: (MonadIO m,MonadAI m,MonadMask m) => Value -> Value -> String -> T.Text -> m ()
-myai yaml param model originText = runInputT defaultSettings $ evalContT $ do
+myai yaml param prompt originText = runInputT mySettings $ evalContT $ do
     let logger = yaml ^? key "log" == Just  (A.toJSON True)
-    req <- lift $ lift $ useAzureRequest model
+    req <- lift $ lift $ useAzureRequest prompt
     (recurConversation,msgs) <- createLabel V.empty
-    input <- lift $ do
-        let prefix = "\ESC[38;5;69m" <> model
+    input' <- lift $ do
+        let prefix = "\ESC[38;5;69m" <> prompt
         a <- getInputLine $ prefix <> "> "
         let mutipleInput = do
                 a <- getInputLine $ prefix <> "| "
                 if a == Just ":" then pure Nothing else do
                     b <- mutipleInput
                     pure $ if isNothing b then a else a <> Just "\n" <> b
+        
         if a == Just ":" then mutipleInput else pure a
+    let input = fmap trim input'
+    when (input == Just ":reload") $ lift $ lift $ throwError $ createError $ A.object ["command" =: "reload"]
+    when (fmap (isPrefixOf ":change") input == Just True) $ do
+        let input' = fromJust input
+        let path = trim $ drop (length ":change") input'
+        when (null path) $ do
+            liftIO $ putStrLn ":change path\nThe path can not is null"
+            recurConversation msgs
+        isExist <- liftIO $ doesFileExist path
+        unless isExist $ do
+            liftIO $ putStrLn $ "The file [" <> path <> "] isn't exist"
+            recurConversation msgs
+
+        lift $ lift $ throwError $ createError $ A.object ["command" =: "change", "value" =: path]
     -- 清除会话记录
     when (input == Just ":clear") $ do
         _ <- liftIO $ T.putStr "\ESC[H\ESC[2J\ESC[3J"
@@ -193,7 +243,7 @@ myai yaml param model originText = runInputT defaultSettings $ evalContT $ do
     -- liftIO $ print input
     unless (isNothing input || input == Just ":quit") $ do
         let userInpput = fromJust input
-        let msgs' = V.snoc msgs  $ object ["role" =: "user","content" =: userInpput]
+        let msgs' = if userInpput == ":start" then msgs else V.snoc msgs  $ object ["role" =: "user","content" =: userInpput]
         let p = param & key "messages" . _Array %~ (<> msgs')
         assistantOutput <- lift $ lift $ useStream p req $ do
             liftIO $ T.putStr "\ESC[38;5;169m"

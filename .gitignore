@@ -1,3 +1,6 @@
 .stack-work/
 **/.stack-work/
 *~
+yamls/
+
+!yamls/test.yaml
