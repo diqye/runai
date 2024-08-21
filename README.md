@@ -46,10 +46,11 @@ messages:
 ~/p/runai (master|✔) $ runai
 使用: runai your/path.yaml
 在会话中(Tab补全)
-> :export         将会话导出文件为export.yaml
-> :start          直接调用LLM
-> :clear          清空会话
-> :               进入/退出多行模式
-> :reload         从新加载当前配置文件
+> :export           将会话导出文件为export.yaml
+> :start            直接调用LLM
+> :clear            清空会话
+> :                 进入/退出多行模式
+> :reload           从新加载当前配置文件
 > :change file.yaml 加载新的配置文件
+> :quit file.yaml   加载新的配置文件
 ```

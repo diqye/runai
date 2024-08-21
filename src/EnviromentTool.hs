@@ -182,6 +182,7 @@ processArgs = do
             putStrLn "在会话中(Tab补全)"
             putStrLn "> :export         将会话导出文件为export.yaml"
             putStrLn "> :start          直接调用LLM"
+            putStrLn "> :quit           退出"
             putStrLn "> :clear          清空会话"
             putStrLn "> :               进入/退出多行模式"
             putStrLn "> :reload         从新加载当前配置文件"
