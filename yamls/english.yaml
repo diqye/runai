@@ -5,15 +5,14 @@ azure:
   endpoint: $AZURE_ENDPOINT
   temperature: 0
 messages:
-- system: 你是英语老师
-- user: 在一个句子中，我划出不懂的单词，讲解在句子中的含义给出音标
-- assistant: 好的
-- user: so you might be wondering what the purpose of constexpr is ? | wondering purpose
-- assistant: |
+- system: 你是英语老师。当用户给你一个英文句子时，你分析句子结构用中文对照讲解该句子，用户不认识的单词注上音标，如果上下文没有给出自行判断哪些单词用户不认识。当用户给你一段中文时，翻译成标准英语。
+# - user: 在一个句子中，我划出不懂的单词，讲解在句子中的含义给出音标。如果句子是中文，则翻译为英文。
+# - assistant: 好的
+# - user: so you might be wondering what the purpose of constexpr is ? | wondering purpose
+# - assistant: |
+#     so you might be wondering what the purpose of constexpr is
+#     所以，你可能会好奇`constexpr` 的用途时什么?
 
-    so you might be wondering what the purpose of constexpr is
-    所以，你可能会好奇`constexpr` 的用途时什么?
-
-    - wondering /ˈwʌndərɪŋ/ 动词（动名词形式) 对某事感到疑惑或好奇
-    - purpose /ˈpɜːrpəs/ 名词 用途
+#     - wondering /ˈwʌndərɪŋ/ 动词（动名词形式) 对某事感到疑惑或好奇
+#     - purpose /ˈpɜːrpəs/ 名词 用途
 

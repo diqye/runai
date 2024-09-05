@@ -40,13 +40,13 @@ import Control.Monad (unless,when)
 import qualified Data.Vector as V
 import Control.Monad.Trans.Cont (evalContT)
 import System.Console.Haskeline.Completion (completeFilename)
-import Data.List (intersperse, isPrefixOf, dropWhileEnd)
+import Data.List (intersperse, isPrefixOf, dropWhileEnd, isInfixOf)
 import Data.Monoid (First(..))
 import System.Process (readProcess)
 import System.Exit (exitSuccess)
 import Data.Char (isSpace)
-import System.Directory (doesFileExist)
-import System.FilePath (takeBaseName)
+import System.Directory (doesFileExist, getHomeDirectory)
+import System.FilePath (takeBaseName, (</>))
 
 setVars :: MonadIO m => T.Text -> m T.Text
 setVars content = liftIO $ do
@@ -195,7 +195,7 @@ mySettings = setComplete complete defaultSettings where
     complete :: MonadIO m => CompletionFunc m
     complete p@(a ,_) | ":change " `isPrefixOf` reverse a = completeFilename p
     complete (a ,_) | ":" `isPrefixOf` reverse a = do
-        let commonds = [":export",":start", ":clear", ":reload", ":change"]
+        let commonds = [":export",":start", ":clear",":quit", ":reload", ":change"]
         return ("", simpleCompletion <$> filter (isPrefixOf $ reverse a)  commonds)
     complete _ =  return ("",[])
 
@@ -223,6 +223,7 @@ myai yaml param (prompt,model) originText = runInputT mySettings $ evalContT $ d
     when (fmap (isPrefixOf ":change") input == Just True) $ do
         let input' = fromJust input
         let path = trim $ drop (length ":change") input'
+        path <- handlePath path
         when (null path) $ do
             liftIO $ putStrLn ":change path\nThe path can not is null"
             recurConversation msgs
@@ -259,6 +260,13 @@ myai yaml param (prompt,model) originText = runInputT mySettings $ evalContT $ d
         recurConversation msgs
     liftIO $ putStr "\ESC[0;0m"
 
+handlePath :: MonadIO m => FilePath -> m FilePath
+handlePath path = do
+    home <- liftIO getHomeDirectory
+    let absolutePath
+            | "~" `isPrefixOf` path = home <> tail path
+            | otherwise = path
+    pure absolutePath
 
 export :: MonadIO m => V.Vector Value -> T.Text -> m ()
 export msgs text = liftIO $ do
