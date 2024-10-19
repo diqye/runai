@@ -206,11 +206,12 @@ trim = dropWhileEnd isSpace . dropWhile isSpace
 myai :: (MonadIO m,MonadAI m,MonadMask m) => Value -> Value -> (String,String) -> T.Text -> m ()
 myai yaml param (prompt,model) originText = runInputT mySettings $ evalContT $ do
     let logger = yaml ^? key "log" == Just  (A.toJSON True)
+    let noSession = yaml ^? key "noSession" == Just  (A.toJSON True)
     req <- lift $ lift $ useAzureRequest model
     (recurConversation,msgs) <- createLabel V.empty
     input' <- lift $ do
         let prefix = "\ESC[38;5;69m" <> prompt <> "." <> model
-        a <- getInputLine $ prefix <> "> "
+        a <- getInputLine $ prefix <> if noSession then ":- " else ":+ "
         let mutipleInput = do
                 a <- getInputLine $ prefix <> "| "
                 if a == Just ":" then pure Nothing else do
@@ -257,7 +258,7 @@ myai yaml param (prompt,model) originText = runInputT mySettings $ evalContT $ d
             liftIO $ putStrLn "\ESC[0;0m"
             pure $ text <> token
         let msgs = V.snoc msgs'  $ object ["role" =: "assistant","content" =: assistantOutput]
-        recurConversation msgs
+        if noSession then recurConversation V.empty else recurConversation msgs
     liftIO $ putStr "\ESC[0;0m"
 
 handlePath :: MonadIO m => FilePath -> m FilePath
