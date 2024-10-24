@@ -18,8 +18,9 @@ import Control.Lens((^?), (&), (.~), (%~), (^?!))
 import Data.Aeson.Lens (key, _JSON',_Array, atKey, nth)
 import Control.Applicative((<|>))
 import qualified Myai.Data.Azure as Az
+import qualified Myai.Data.Ollama as O
 import System.Environment (getArgs, getProgName)
-import Myai.Data.Config (Config(_azure), MonadAI, createError)
+import Myai.Data.Config (Config(_azure,_ollama), MonadAI, createError)
 import Data.Default.Class (Default(..))
 import qualified Data.ByteString.Lazy.Char8 as L
 import qualified Data.Aeson as A
@@ -126,7 +127,7 @@ convertMymsgs = map convert where
                 text <- v ^? key "user"
                 pure $ object [ "role" =: "user", "content" =: text]
 
-toAzure :: Value -> Maybe (Value,String,Az.Azure)
+toAzure :: Value -> Maybe (Value,String,Config)
 toAzure yaml = do
     model <- yaml ^? key "model" . _JSON'
     azure <- yaml ^? key "azure"
@@ -138,15 +139,28 @@ toAzure yaml = do
                 "stream" =: True,
                 "messages" =: convertMymsgs msgs
             ]
-    pure (config,model,Az.Azure {Az._key = key, Az._endpoint = endpoint})
+    pure (config,model,def { _azure = Az.Azure {Az._key = key, Az._endpoint = endpoint}})
 
+toOllama :: Value -> Maybe (Value,String,Config)
+toOllama yaml = do
+    model <- yaml ^? key "model" . _JSON'
+    ollama <- yaml ^? key "ollama"
+    msgs <- yaml ^? key "messages" . _JSON'
+    baseURL <- ollama ^? key "baseURL" . _JSON'
+    let ollamaConf = ollama & atKey "baseURL" .~ Nothing
+    let config = ollamaConf <> object [
+                "model" =: model,
+                "stream" =: True,
+                "messages" =: convertMymsgs msgs
+            ]
+    pure (config,model,def {_ollama = def {O._baseURL = baseURL}})
 runai :: IO ()
 runai = processArgs >>= runai' where
     runai' arg = do
         let fileName = takeBaseName arg
         (v,text) <- readYamlFromFile arg
-        let (param,model,aconf) = fromJust $ toAzure v
-        let config = def {_azure = aconf}
+        let (param,model,aconf) = fromJust $ toAzure v <|> toOllama v
+        let config = aconf
         a <- runAIT config $ myai v param (fileName,model) text
         case a of
             Right _ -> pure ()
@@ -207,7 +221,7 @@ myai :: (MonadIO m,MonadAI m,MonadMask m) => Value -> Value -> (String,String) -
 myai yaml param (prompt,model) originText = runInputT mySettings $ evalContT $ do
     let logger = yaml ^? key "log" == Just  (A.toJSON True)
     let noSession = yaml ^? key "noSession" == Just  (A.toJSON True)
-    req <- lift $ lift $ useAzureRequest model
+    req <- lift $ lift $ useAzureRequest model <|> useOllamaRequest "/api/chat"
     (recurConversation,msgs) <- createLabel V.empty
     input' <- lift $ do
         let prefix = "\ESC[38;5;69m" <> prompt <> "." <> model
@@ -252,7 +266,7 @@ myai yaml param (prompt,model) originText = runInputT mySettings $ evalContT $ d
             liftIO $ T.putStr "\ESC[38;5;169m"
             (recur,v,text) <- recurValue ""
             when logger $ liftIO $ putStrLn "" >> printJSON v
-            let token = fromMaybe "" $ v  ^? key "choices" . nth 0 . key "delta" . key "content" . _JSON'
+            let token = fromMaybe "" $ v  ^? key "choices" . nth 0 . key "delta" . key "content" . _JSON' <|> v  ^? key "message"  . key "content" . _JSON'
             liftIO $ T.putStr token
             recur $ text <> token
             liftIO $ putStrLn "\ESC[0;0m"
