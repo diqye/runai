@@ -1,53 +1,47 @@
 {-# LANGUAGE FlexibleContexts #-}
 module EnviromentTool where
 
-import Mydefault
-import Myai
-import qualified Data.Text as T
-import qualified Data.Text.IO as T
-import Control.Monad.Cont (MonadIO (liftIO), MonadTrans (lift),runContT,ContT, MonadCont)
-import qualified System.Environment as E
-import Data.Maybe (fromMaybe, isJust, fromJust, isNothing)
-import Data.String.Conversions (cs)
-import Data.Aeson (FromJSON, Value (Null),object)
-import qualified Data.Yaml as Y
-import Data.Either (fromRight)
-import Text.Parsec (runParserT, char, notFollowedBy, space, anyChar, many1, many, ParsecT, spaces, try)
-import Text.Parsec.Text (Parser)
-import Control.Lens((^?), (&), (.~), (%~), (^?!))
-import Data.Aeson.Lens (key, _JSON',_Array, atKey, nth)
-import Control.Applicative((<|>))
-import qualified Myai.Data.Azure as Az
-import qualified Myai.Data.Ollama as O
-import System.Environment (getArgs, getProgName)
-import Myai.Data.Config (Config(_azure,_ollama), MonadAI, createError)
-import Data.Default.Class (Default(..))
-import qualified Data.ByteString.Lazy.Char8 as L
-import qualified Data.Aeson as A
-import Control.Monad.Reader (ReaderT)
-import Control.Monad.Except (ExceptT, MonadError (throwError))
-import System.Console.Haskeline
-    ( runInputT,
-      defaultSettings,
-      getInputLine,
-      Settings(complete),
-      setComplete,
-      simpleCompletion,
-      Completion,
-      Settings(Settings),
-      CompletionFunc )
-import Control.Monad.Catch(MonadMask)
-import Control.Monad (unless,when)
-import qualified Data.Vector as V
-import Control.Monad.Trans.Cont (evalContT)
-import System.Console.Haskeline.Completion (completeFilename)
-import Data.List (intersperse, isPrefixOf, dropWhileEnd, isInfixOf)
-import Data.Monoid (First(..))
-import System.Process (readProcess)
-import System.Exit (exitSuccess)
-import Data.Char (isSpace)
-import System.Directory (doesFileExist, getHomeDirectory)
-import System.FilePath (takeBaseName, (</>))
+import           Mydefault                                                                                                                                                                         -- 
+import           Myai                                                                                                                                                                              -- 
+import qualified Myai.Data.Azure                     as Az                                                                                                                                         -- 
+import qualified Myai.Data.Ollama                    as O                                                                                                                                          -- 
+import           Myai.Data.Config                    (Config(_azure,_ollama), MonadAI, createError)                                                                                                -- 
+import           Control.Monad.Cont                  (runContT, ContT, MonadCont)                                                                               -- mtl-2.3.1
+import Control.Monad.Trans.Class (MonadTrans(lift))
+import       Control.Monad.IO.Class (MonadIO(liftIO))
+import           Control.Monad.Reader                (ReaderT)                                                                                                                                     -- mtl-2.3.1
+import           Control.Monad.Except                (ExceptT, MonadError(throwError))                                                                                                             -- mtl-2.3.1
+import qualified Data.Text                           as T                                                                                                                                          -- text-2.0.2
+import qualified Data.Text.IO                        as T                                                                                                                                          -- text-2.0.2
+import           Control.Lens                        ((^?), (&), (.~), (%~), (^?!))                                                                                                                -- lens-5.2.3
+import qualified System.Environment                  as E                                                                                                                                          -- base-4.18.2.1
+import           Data.Maybe                          (fromMaybe, isJust, fromJust, isNothing)                                                                                                      -- base-4.18.2.1
+import           Data.Either                         (fromRight)                                                                                                                                   -- base-4.18.2.1
+import           Control.Applicative                 ((<|>))                                                                                                                                       -- base-4.18.2.1
+import           System.Environment                  (getArgs, getProgName)                                                                                                                        -- base-4.18.2.1
+import           Control.Monad                       (unless, when)                                                                                                                                -- base-4.18.2.1
+import           Data.List                           (intersperse, isPrefixOf, dropWhileEnd, isInfixOf)                                                                                            -- base-4.18.2.1
+import           Data.Monoid                         (First(..))                                                                                                                                   -- base-4.18.2.1
+import           System.Exit                         (exitSuccess)                                                                                                                                 -- base-4.18.2.1
+import           Data.Char                           (isSpace)                                                                                                                                     -- base-4.18.2.1
+import           Data.Aeson                          (FromJSON, Value(Null), object,(.=))                                                                                                               -- aeson-2.1.2.1
+import qualified Data.Aeson                          as A                                                                                                                                          -- aeson-2.1.2.1
+import qualified Data.Yaml                           as Y                                                                                                                                          -- yaml-0.11.11.2
+import           Text.Parsec                         (runParserT, char, notFollowedBy, space, anyChar, many1, many, ParsecT, spaces, try)                                                          -- parsec-3.1.16.1
+import           Text.Parsec.Text                    (Parser)                                                                                                                                      -- parsec-3.1.16.1
+import qualified Data.Vector                         as V                                                                                                                                          -- vector-0.13.1.0
+import           Data.Aeson.Lens                     (key, _JSON', _Array, atKey, nth)                                                                                                             -- lens-aeson-1.2.3
+import           System.Process                      (readProcess)                                                                                                                                 -- process-1.6.19.0
+import           System.Console.Haskeline            (runInputT, defaultSettings, getInputLine, Settings(complete), setComplete, simpleCompletion, Completion, Settings(Settings), CompletionFunc) -- haskeline-0.8.2.1
+import           System.Console.Haskeline.Completion (completeFilename)                                                                                                                            -- haskeline-0.8.2.1
+import           Control.Monad.Catch                 (MonadMask)                                                                                                                                   -- exceptions-0.10.7
+import           System.Directory                    (doesFileExist, getHomeDirectory)                                                                                                             -- directory-1.3.8.5
+import           System.FilePath                     (takeBaseName, (</>))                                                                                                                         -- filepath-1.4.300.1
+import qualified Data.ByteString.Lazy.Char8          as L                                                                                                                                          -- bytestring-0.11.5.3
+import           Control.Monad.Trans.Cont            (evalContT)                                                                                                                                   -- transformers-0.6.1.0
+import           Data.String.Conversions             (cs)                                                                                                                                          -- string-conversions-0.4.0.1
+import           Data.Default.Class                  (Default(..))                                                                                                                                 -- data-default-class-0.1.2.2
+
 
 setVars :: MonadIO m => T.Text -> m T.Text
 setVars content = liftIO $ do

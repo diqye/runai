@@ -6,3 +6,6 @@ export.yaml
 !yamls/test.yaml
 
 !yamls/example.png
+
+graph-new.json
+graph.json
