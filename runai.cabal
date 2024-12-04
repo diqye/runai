@@ -24,7 +24,6 @@ source-repository head
 library
   exposed-modules:
       EnviromentTool
-      Test
   other-modules:
       Paths_runai
   hs-source-dirs:
